@@ -224,7 +224,10 @@ def main():
                 sys.exit("server did not start")
             time.sleep(0.05)
         token = (ROOT / ".token").read_text().strip()
-        asyncio.run(run(token))
+        try:
+            asyncio.run(run(token))
+        except Exception as e:      # a crash is a failure too, but still show the server output
+            check(False, f"test run crashed: {e!r}")
     finally:
         proc.terminate()
         proc.wait(5)
