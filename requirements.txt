@@ -1,0 +1,5 @@
+aiohttp>=3.9
+qrcode>=7.4
+cryptography>=42
+pyobjc-framework-Quartz>=10.0; sys_platform == "darwin"
+pyobjc-framework-ApplicationServices>=10.0; sys_platform == "darwin"

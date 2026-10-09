@@ -1,0 +1,1240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PhonePad">
+<meta name="theme-color" content="#0b0d12">
+<meta name="format-detection" content="telephone=no">
+<title>PhonePad</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #11151d;
+    --line: #262d3b;
+    --key: rgba(30, 36, 52, 0.92);
+    --text: #e8ebf2;
+    --dim: #7a8296;
+    --accent: #4f8cff;
+    --fire: #e5484d;
+    --latch: #f5a524;
+    --ok: #3ecf8e;
+    --wait: #f5a524;
+    --bad: #ef5350;
+    /* one layout unit, scales with the phone's landscape height */
+    --u: clamp(40px, 14vh, 62px);
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  html, body {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: var(--bg);
+    color: var(--text);
+    font: 600 14px/1.15 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  button { font: inherit; color: inherit; }
+  #app {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+             env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* ---- top bar ---- */
+  header {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 10px;
+  }
+  #dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--bad); }
+  #dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  #dot.wait { background: var(--wait); }
+  #status {
+    flex: 1;
+    min-width: 0;
+    margin-left: 2px;
+    color: var(--dim);
+    font-weight: 500;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chip {
+    flex: none;
+    min-width: 36px;
+    height: 30px;
+    padding: 0 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+    font-size: 14px;
+  }
+  .gap { flex: none; width: 6px; }
+
+  /* ---- play field ---- */
+  main { position: relative; flex: 1; min-height: 0; margin: 0 8px 8px; }
+  .zone { position: absolute; top: 0; bottom: 0; border-radius: 18px; overflow: hidden; }
+  #moveZone { left: 0; width: 41%; background: var(--panel); border: 1px dashed var(--line); }
+  #lookZone { right: 0; left: calc(41% + 8px); background: linear-gradient(160deg, #10141c, #0d1017); border: 1px dashed var(--line); }
+  .zone .label {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    text-align: center;
+    color: var(--dim);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  .zone .label small {
+    display: block;
+    margin-top: 8px;
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: none;
+    font-weight: 500;
+  }
+  .zone .label small[hidden] { display: none; }
+  #lookZone .label { left: 0; right: 40%; }
+  .zone.active .label { opacity: 0; }
+  .stick {
+    display: none;
+    position: absolute;
+    width: 110px;
+    height: 110px;
+    margin: -55px 0 0 -55px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    pointer-events: none;
+  }
+  #moveZone.active .stick { display: block; }
+  .knob {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 50px;
+    height: 50px;
+    margin: -25px 0 0 -25px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 4px 16px rgba(79, 140, 255, 0.45);
+  }
+  .stick.sprint { border-color: var(--latch); }
+  .stick.sprint .knob { background: var(--latch); box-shadow: 0 4px 16px rgba(245, 165, 36, 0.5); }
+
+  /* ---- buttons (positions are in layout units from the field's edges) ---- */
+  .btn {
+    position: absolute;
+    z-index: 2;
+    width: var(--u);
+    height: calc(var(--u) * 0.9);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border-radius: 14px;
+    background: var(--key);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-size: 13px;
+    transition: transform 0.06s, background-color 0.06s;
+  }
+  .btn .cap { font-size: 10px; font-weight: 500; color: var(--dim); }
+  .btn.round { border-radius: 50%; }
+  .btn.held { background: var(--accent); border-color: var(--accent); transform: scale(0.94); }
+  .btn.held .cap { color: rgba(255, 255, 255, 0.8); }
+  .btn.latched { background: var(--latch); border-color: var(--latch); color: #1a1205; }
+  .btn.latched .cap { color: rgba(26, 18, 5, 0.7); }
+  .btn.fire { background: rgba(229, 72, 77, 0.22); border: 2px solid var(--fire); font-size: 15px; letter-spacing: 0.08em; }
+  .btn.fire.held { background: var(--fire); border-color: var(--fire); }
+
+  #b-fireL  { left: calc(var(--u) * 0.2);  top: calc(var(--u) * 0.2);  width: calc(var(--u) * 1.3); height: calc(var(--u) * 1.3); }
+  #b-sprint { left: calc(var(--u) * 1.7);  top: calc(var(--u) * 0.3); }
+
+  #b-leanR  { right: calc(var(--u) * 0.3);  top: calc(var(--u) * 0.15); }
+  #b-leanL  { right: calc(var(--u) * 1.4);  top: calc(var(--u) * 0.15); }
+  #b-mode   { right: calc(var(--u) * 2.5);  top: calc(var(--u) * 0.15); }
+  #b-nade   { right: calc(var(--u) * 3.6);  top: calc(var(--u) * 0.15); }
+
+  #b-reload { right: calc(var(--u) * 0.65); bottom: calc(var(--u) * 3.15); width: calc(var(--u) * 1.05); height: calc(var(--u) * 1.05); }
+  #b-fire   { right: calc(var(--u) * 0.3);  bottom: calc(var(--u) * 1.2);  width: calc(var(--u) * 1.75); height: calc(var(--u) * 1.75); }
+  #b-aim    { right: calc(var(--u) * 2.3);  bottom: calc(var(--u) * 1.5);  width: calc(var(--u) * 1.3); height: calc(var(--u) * 1.3); }
+
+  #b-jump   { right: calc(var(--u) * 0.3);  bottom: calc(var(--u) * 0.15); width: calc(var(--u) * 1.75); }
+  #b-crouch { right: calc(var(--u) * 2.2);  bottom: calc(var(--u) * 0.15); }
+  #b-stand  { right: calc(var(--u) * 3.3);  bottom: calc(var(--u) * 0.15); }
+  #b-use    { right: calc(var(--u) * 4.4);  bottom: calc(var(--u) * 0.15); }
+
+  /* ---- modes ---- */
+  #padView, #mouseView { position: absolute; inset: 0; }
+  #mouseView { display: none; grid-template-columns: 1fr minmax(170px, 0.85fr) 1fr; gap: 10px; }
+  body.mode-mouse #padView, body.mode-mouse .padOnly { display: none; }
+  body.mode-mouse #mouseView { display: grid; }
+  #modeBtn { gap: 6px; }
+  .btn.big {
+    position: relative;
+    width: auto;
+    height: auto;
+    border-radius: 22px;
+    font-size: 24px;
+    letter-spacing: 0.04em;
+    gap: 6px;
+  }
+  .btn.big .cap { font-size: 12px; }
+  .btn.big.left { background: rgba(229, 72, 77, 0.16); border: 2px solid var(--fire); }
+  .btn.big.left.held { background: var(--fire); border-color: var(--fire); }
+  .btn.big.right { background: rgba(79, 140, 255, 0.14); border: 2px solid var(--accent); }
+  .mcol { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .mrow { display: flex; gap: 8px; }
+  .btn.flat { position: relative; flex: 1; width: auto; height: 42px; }
+  #mPad {
+    position: relative;
+    flex: 1;
+    min-height: 60px;
+    border-radius: 16px;
+    border: 1px dashed var(--line);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 8px;
+    color: var(--dim);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+  #motionBtn, #clutch {
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--key);
+    font-size: 14px;
+  }
+  #motionBtn.on { background: var(--ok); border-color: var(--ok); color: #06210f; }
+  #clutch.held { background: var(--latch); border-color: var(--latch); color: #1a1205; }
+
+  /* ---- calibration ---- */
+  #calib .card { text-align: center; }
+  #calibArrow { font-size: 64px; line-height: 1.1; margin: 6px 0; }
+  #calibText { font-size: 17px; margin-bottom: 14px; }
+  .bar { height: 8px; border-radius: 4px; background: var(--panel); overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: var(--ok); transition: width 0.08s; }
+  ol.steps { padding-left: 20px; font-weight: 500; line-height: 1.5; }
+  ol.steps li { padding: 6px 0; border-top: 1px solid var(--line); }
+  ol.steps li:first-child { border-top: 0; }
+  ol.steps b { color: var(--text); }
+  a.pill { display: inline-block; text-decoration: none; color: inherit; margin-top: 4px; }
+
+  /* ---- edit mode ---- */
+  body.editing .btn, body.editing .chip[data-bind] { outline: 2px dashed var(--latch); outline-offset: 2px; }
+  #editBar {
+    display: none;
+    position: absolute;
+    z-index: 3;
+    left: 50%;
+    top: 8px;
+    transform: translateX(-50%);
+    align-items: center;
+    gap: 10px;
+    padding: 6px 6px 6px 14px;
+    border-radius: 12px;
+    background: var(--latch);
+    color: #1a1205;
+    white-space: nowrap;
+  }
+  #editBar button { border: 0; border-radius: 8px; padding: 6px 12px; background: #1a1205; color: #fff; }
+  body.editing #editBar { display: flex; }
+
+  /* ---- sheets (settings, key picker) ---- */
+  .sheet {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    align-items: center;
+    justify-content: center;
+    padding: calc(env(safe-area-inset-top) + 10px) calc(env(safe-area-inset-right) + 10px)
+             calc(env(safe-area-inset-bottom) + 10px) calc(env(safe-area-inset-left) + 10px);
+    background: rgba(0, 0, 0, 0.6);
+  }
+  .sheet.open { display: flex; }
+  .card {
+    width: min(560px, 100%);
+    max-height: 100%;
+    overflow-y: auto;
+    touch-action: pan-y;
+    padding: 16px;
+    border-radius: 18px;
+    background: #161b26;
+    border: 1px solid var(--line);
+  }
+  .card * { touch-action: pan-y; }
+  .card h2 { font-size: 16px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-weight: 500; }
+  .row > span { flex: 1; }
+  .row output { min-width: 40px; text-align: right; color: var(--dim); }
+  input[type=range] { flex: 1.4; accent-color: var(--accent); touch-action: pan-x; }
+  .pill { border: 1px solid var(--line); background: var(--panel); border-radius: 9px; padding: 7px 12px; }
+  .pill.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .seg { display: flex; gap: 6px; }
+  .keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; padding-top: 10px; }
+  .keys button { height: 38px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); font-size: 13px; }
+  .keys button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .hint { color: var(--dim); font-weight: 500; font-size: 12px; padding-top: 8px; line-height: 1.4; }
+
+  #rotate {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--bg);
+    color: var(--dim);
+    font-weight: 500;
+  }
+  #rotate .phone { width: 44px; height: 76px; border: 3px solid var(--text); border-radius: 10px; animation: turn 1.8s ease-in-out infinite; }
+  @keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+  @media (orientation: portrait) {
+    body:not(.mode-mouse) #rotate { display: flex; }
+    /* Mouse mode works upright too: controls on top, the two clicks under the thumb. */
+    body.mode-mouse #mouseView {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: minmax(0, 1fr) minmax(0, 1.15fr);
+    }
+    body.mode-mouse .mcol { grid-column: 1 / -1; grid-row: 1; }
+    body.mode-mouse .btn.big { grid-row: 2; }
+    body.mode-mouse #status { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div id="dot" class="wait"></div>
+    <div id="status">Connecting…</div>
+    <button class="chip padOnly" data-bind="prev"></button>
+    <button class="chip padOnly" data-bind="w1"></button>
+    <button class="chip padOnly" data-bind="w2"></button>
+    <button class="chip padOnly" data-bind="w3"></button>
+    <button class="chip padOnly" data-bind="w4"></button>
+    <button class="chip padOnly" data-bind="w5"></button>
+    <button class="chip padOnly" data-bind="next"></button>
+    <div class="gap"></div>
+    <button class="chip" data-bind="tab"></button>
+    <button class="chip" data-bind="menu"></button>
+    <button class="chip" id="modeBtn"></button>
+    <button class="chip" id="gear" aria-label="Settings">⚙︎</button>
+  </header>
+  <main>
+   <div id="padView">
+    <div class="zone" id="moveZone">
+      <div class="label">Move<small id="tip" hidden>Tip: Share → Add to Home Screen</small></div>
+      <div class="stick"><div class="knob"></div></div>
+    </div>
+    <div class="zone" id="lookZone"><div class="label">Swipe to look</div></div>
+
+    <div class="btn round fire" data-bind="fireL" id="b-fireL"></div>
+    <div class="btn" data-bind="sprint" id="b-sprint"></div>
+    <div class="btn" data-bind="nade" id="b-nade"></div>
+    <div class="btn" data-bind="mode" id="b-mode"></div>
+    <div class="btn" data-bind="leanL" id="b-leanL"></div>
+    <div class="btn" data-bind="leanR" id="b-leanR"></div>
+    <div class="btn round" data-bind="reload" id="b-reload"></div>
+    <div class="btn round" data-bind="aim" id="b-aim"></div>
+    <div class="btn round fire" data-bind="fire" id="b-fire"></div>
+    <div class="btn" data-bind="use" id="b-use"></div>
+    <div class="btn" data-bind="stand" id="b-stand"></div>
+    <div class="btn" data-bind="crouch" id="b-crouch"></div>
+    <div class="btn" data-bind="jump" id="b-jump"></div>
+   </div>
+
+   <div id="mouseView">
+    <div class="btn big left" data-bind="mLeft"></div>
+    <div class="mcol">
+      <button id="motionBtn">Enable motion</button>
+      <div id="mPad">Drag here to move the cursor,<br>or turn on motion and move the phone</div>
+      <div class="mrow">
+        <div class="btn flat" data-bind="mUp"></div>
+        <div class="btn flat" data-bind="mDown"></div>
+      </div>
+      <button id="clutch">Hold to pause motion</button>
+    </div>
+    <div class="btn big right" data-bind="mRight"></div>
+   </div>
+
+    <div id="editBar">Tap any button to change its key <button id="editDone">Done</button></div>
+  </main>
+</div>
+
+<div class="sheet" id="settings">
+  <div class="card">
+    <h2>Settings <button class="pill" id="settingsClose">Close</button></h2>
+    <div class="row"><span>Swipe sensitivity</span><input type="range" id="sens" min="0.2" max="3" step="0.05"><output id="sensOut"></output></div>
+    <div class="row"><span>Motion sensitivity</span><input type="range" id="gyroSens" min="0.2" max="3" step="0.05"><output id="gyroSensOut"></output></div>
+    <div class="row"><span>Motion steadiness (more = smoother, less = snappier)</span><input type="range" id="steady" min="0" max="1" step="0.05"><output id="steadyOut"></output></div>
+    <div class="row"><span>Precision: slow moves finer, fast moves further</span><button class="pill" id="precisionBtn"></button></div>
+    <div class="row"><span>Set up motion for this phone again</span><button class="pill" id="recal">Calibrate</button></div>
+    <div class="row"><span>Use motion to aim in Pad mode too</span><button class="pill" id="motionInPad"></button></div>
+    <div class="row"><span>Vibrate on button presses (iOS 18 or later)</span><button class="pill" id="hapticsBtn"></button></div>
+    <div class="row"><span>Sprint when the move stick is pushed all the way forward</span><button class="pill" id="autoSprint"></button></div>
+    <div class="row"><span>Change which key a button sends</span><button class="pill" id="editStart">Edit buttons</button></div>
+    <div class="row"><span>Put every button back to its default key</span><button class="pill" id="resetBinds">Reset</button></div>
+    <p class="hint">FIRE also turns the camera if you drag it. AIM and Sprint latch on and off with each tap.
+      In Mouse mode, drag a click button to fine-tune your aim while holding it.
+      Camera speed in the game itself is in Roblox Settings → Camera Sensitivity.</p>
+  </div>
+</div>
+
+<div class="sheet" id="picker">
+  <div class="card">
+    <h2><span id="pickTitle"></span> <button class="pill" id="pickClose">Done</button></h2>
+    <div class="row"><span>When tapped</span>
+      <div class="seg"><button class="pill" data-mode="hold">Hold while pressed</button><button class="pill" data-mode="toggle">Toggle on/off</button></div>
+    </div>
+    <div class="keys" id="keyGrid"></div>
+  </div>
+</div>
+
+<div class="sheet" id="calib">
+  <div class="card">
+    <h2><span>Motion setup</span> <button class="pill" id="calibCancel">Cancel</button></h2>
+    <div id="calibArrow">➜</div>
+    <div id="calibText"></div>
+    <div class="bar"><div id="calibBar"></div></div>
+    <p class="hint" id="calibHint">Hold the phone sideways, the way you'll play.</p>
+  </div>
+</div>
+
+<div class="sheet" id="secure">
+  <div class="card">
+    <h2><span>Set up motion (one time)</span> <button class="pill" id="secureClose">Close</button></h2>
+    <p class="hint" style="padding: 0 0 8px">iPhone only shares motion with secure pages, so PhonePad has a
+      second, secure address. Your phone needs to trust it once:</p>
+    <ol class="steps">
+      <li>Download the PhonePad certificate, then tap <b>Allow</b>.<br><a class="pill" id="caLink" href="/phonepad.mobileconfig">Download certificate</a></li>
+      <li>Open <b>Settings → Profile Downloaded → Install</b> (enter your passcode).</li>
+      <li>Then <b>Settings → General → About → Certificate Trust Settings</b> and turn on <b>PhonePad local CA</b>.</li>
+      <li>Come back here and open the secure page. Add that one to your Home Screen.<br><a class="pill" id="secureLink" href="#">Open secure page</a></li>
+    </ol>
+    <p class="hint">The certificate only works for addresses on your own network, so it can't be used to fake real websites.</p>
+  </div>
+</div>
+
+<div id="rotate"><div class="phone"></div>Turn your phone sideways
+  <button class="pill" id="rotateMouse">or use Mouse mode upright</button></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const RADIUS = 55;
+  const STORE = 'phonepad.fps.v1';
+
+  // ---- default layout: Roblox military-FPS conventions --------------------------
+  // label is the button's name; key is what the Mac receives; mode is hold|toggle.
+  const DEFAULTS = {
+    fire:   { label: 'FIRE',   key: 'mouse_left',  mode: 'hold', look: true },
+    fireL:  { label: 'FIRE',   key: 'mouse_left',  mode: 'hold' },
+    aim:    { label: 'AIM',    key: 'mouse_right', mode: 'toggle' },
+    reload: { label: 'Reload', key: 'r',     mode: 'hold' },
+    jump:   { label: 'Jump',   key: 'space', mode: 'hold' },
+    crouch: { label: 'Crouch', key: 'control', mode: 'hold' },
+    stand:  { label: 'Stand',  key: 'x',     mode: 'hold' },
+    use:    { label: 'Use',    key: 'f',     mode: 'hold' },
+    leanL:  { label: 'Lean ◀', key: 'q',     mode: 'hold' },
+    leanR:  { label: 'Lean ▶', key: 'e',     mode: 'hold' },
+    mode:   { label: 'Mode',   key: 'v',     mode: 'hold' },
+    nade:   { label: 'Nade',   key: 'g',     mode: 'hold' },
+    sprint: { label: 'Sprint', key: 'shift', mode: 'toggle' },
+    w1:     { label: '',       key: '1',     mode: 'hold' },
+    w2:     { label: '',       key: '2',     mode: 'hold' },
+    w3:     { label: '',       key: '3',     mode: 'hold' },
+    w4:     { label: '',       key: '4',     mode: 'hold' },
+    w5:     { label: '',       key: '5',     mode: 'hold' },
+    prev:   { label: '‹',      key: 'wheel_up',   mode: 'hold' },
+    next:   { label: '›',      key: 'wheel_down', mode: 'hold' },
+    mLeft:  { label: 'Shoot',  key: 'mouse_left',  mode: 'hold', look: true },
+    mRight: { label: 'Aim',    key: 'mouse_right', mode: 'hold', look: true },
+    mUp:    { label: '',       key: 'wheel_up',   mode: 'hold' },
+    mDown:  { label: '',       key: 'wheel_down', mode: 'hold' },
+    tab:    { label: 'Tab',    key: 'tab',    mode: 'hold' },
+    menu:   { label: 'Esc',    key: 'escape', mode: 'hold' },
+  };
+
+  // Must match macinput.KEY_NAMES on the server (unknown names are ignored there).
+  const KEYS = [
+    'mouse_left', 'mouse_right', 'wheel_up', 'wheel_down',
+    ...'abcdefghijklmnopqrstuvwxyz'.split(''), ...'1234567890'.split(''),
+    'space', 'shift', 'control', 'option', 'command', 'tab', 'escape', 'return', 'backspace',
+    'up', 'down', 'left', 'right',
+  ];
+  const CAPS = {
+    mouse_left: 'LMB', mouse_right: 'RMB', wheel_up: 'Wheel↑', wheel_down: 'Wheel↓',
+    space: 'Space', shift: '⇧ Shift', control: 'Ctrl', option: '⌥ Opt', command: '⌘ Cmd',
+    tab: 'Tab', escape: 'Esc', return: 'Return', backspace: '⌫',
+    up: '↑', down: '↓', left: '←', right: '→',
+  };
+  const cap = (k) => CAPS[k] || k.toUpperCase();
+
+  // ---- saved settings -----------------------------------------------------------------
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch (e) { saved = {}; }
+  const binds = {};
+  function loadBinds() {
+    const custom = saved.binds || {};
+    for (const id in DEFAULTS) {
+      const c = custom[id] || {};
+      binds[id] = {
+        ...DEFAULTS[id],
+        key: KEYS.includes(c.key) ? c.key : DEFAULTS[id].key,
+        mode: c.mode === 'hold' || c.mode === 'toggle' ? c.mode : DEFAULTS[id].mode,
+      };
+    }
+  }
+  loadBinds();
+  let sens = Number.isFinite(saved.sens) ? saved.sens : 1;
+  let gyroSens = Number.isFinite(saved.gyroSens) ? saved.gyroSens : 1;
+  let autoSprint = saved.autoSprint !== false;
+  let motionInPad = saved.motionInPad === true;
+  let haptics = saved.haptics !== false;
+  let calib = saved.calib && saved.calib.v === 2 ? saved.calib : null;
+  let steadiness = Number.isFinite(saved.steadiness) ? saved.steadiness : 0.5;
+  let precision = saved.precision !== false;
+  let mode = saved.mode === 'mouse' ? 'mouse' : 'pad';
+  const urlMode = new URLSearchParams(location.search).get('mode');
+  if (urlMode === 'mouse' || urlMode === 'pad') mode = urlMode;
+  function save() {
+    const custom = {};
+    for (const id in binds) {
+      if (binds[id].key !== DEFAULTS[id].key || binds[id].mode !== DEFAULTS[id].mode) {
+        custom[id] = { key: binds[id].key, mode: binds[id].mode };
+      }
+    }
+    try {
+      localStorage.setItem(STORE, JSON.stringify(
+        { binds: custom, sens, gyroSens, steadiness, precision, autoSprint, motionInPad, haptics, calib, mode }));
+    } catch (e) {}
+  }
+
+  // ---- pairing token ------------------------------------------------------------------
+  let token = new URLSearchParams(location.search).get('token') || '';
+  try {
+    if (token) localStorage.setItem('phonepad.token', token);
+    else token = localStorage.getItem('phonepad.token') || '';
+  } catch (e) {}
+
+  // ---- connection state ----------------------------------------------------------------
+  let ws = null;
+  let retryTimer = null;
+  let dirty = false;
+  const stick = [0, 0];
+  const look = [0, 0];      // finger travel not yet sent
+  const resetters = [];
+
+  let conn = ['Connecting…', 'wait'];
+  let noticeTimer = null;
+  function setStatus(text, cls) {
+    conn = [text, cls];
+    if (noticeTimer) return;      // a notice is showing; it restores this when done
+    $('status').textContent = text;
+    $('dot').className = cls;
+  }
+  // A short message in the status line that gives way to the connection state.
+  function notice(text) {
+    clearTimeout(noticeTimer);
+    $('status').textContent = text;
+    noticeTimer = setTimeout(() => { noticeTimer = null; setStatus(...conn); }, 4000);
+  }
+  function send(obj) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  }
+  const r3 = (v) => Math.round(v * 1000) / 1000;
+  // Capture keeps a finger's events on the control it started on. It can fail
+  // (pointer already gone); that must never swallow the press itself.
+  function capture(el, id) {
+    try { el.setPointerCapture(id); } catch (e) { /* ignore */ }
+  }
+  function sendStick() {
+    dirty = false;
+    send({ t: 's', m: [0, 0], l: stick.map(r3) });
+  }
+
+  // Several controls can hold the same key (two FIRE buttons, auto-sprint and the
+  // Sprint button). The Mac only sees down when the first one grabs it and up
+  // when the last one lets go.
+  const holders = new Map();
+  function hold(key, src) {
+    let set = holders.get(key);
+    if (!set) holders.set(key, set = new Set());
+    if (set.has(src)) return;
+    set.add(src);
+    if (set.size === 1) send({ t: 'b', k: key, d: true });
+  }
+  function unhold(key, src) {
+    const set = holders.get(key);
+    if (!set || !set.delete(src)) return;
+    if (set.size === 0) {
+      holders.delete(key);
+      send({ t: 'b', k: key, d: false });
+    }
+  }
+
+  // ---- move stick (floating) + auto-sprint ----------------------------------------
+  (function setupMove() {
+    const zone = $('moveZone');
+    const base = zone.querySelector('.stick');
+    const knob = zone.querySelector('.knob');
+    let pid = null, ox = 0, oy = 0;
+
+    function setSprint(on) {
+      base.classList.toggle('sprint', on);
+      if (on) hold(binds.sprint.key, 'auto'); else unhold(binds.sprint.key, 'auto');
+    }
+    function reset() {
+      pid = null;
+      zone.classList.remove('active');
+      stick[0] = stick[1] = 0;
+      dirty = true;
+      setSprint(false);
+    }
+    zone.addEventListener('pointerdown', (e) => {
+      if (pid !== null) return;
+      e.preventDefault();
+      pid = e.pointerId;
+      capture(zone, pid);
+      const r = zone.getBoundingClientRect();
+      ox = e.clientX;
+      oy = e.clientY;
+      base.style.left = (ox - r.left) + 'px';
+      base.style.top = (oy - r.top) + 'px';
+      knob.style.transform = 'translate(0px, 0px)';
+      zone.classList.add('active');
+    });
+    zone.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== pid) return;
+      let dx = e.clientX - ox, dy = e.clientY - oy;
+      const d = Math.hypot(dx, dy);
+      if (d > RADIUS) { dx *= RADIUS / d; dy *= RADIUS / d; }
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      stick[0] = dx / RADIUS;
+      stick[1] = dy / RADIUS;
+      dirty = true;
+      setSprint(autoSprint && stick[1] < -0.9 && Math.abs(stick[0]) < 0.45);
+    });
+    const end = (e) => { if (e.pointerId === pid) reset(); };
+    zone.addEventListener('pointerup', end);
+    zone.addEventListener('pointercancel', end);
+    zone.addEventListener('lostpointercapture', end);
+    resetters.push(() => { if (pid !== null) reset(); });
+  })();
+
+  // ---- swipe-to-look ----------------------------------------------------------------
+  // Any pointer that is "looking" adds its travel to `look`; it is sent once per frame.
+  function trackLook(el, isLooking) {
+    const last = new Map();
+    el.addEventListener('pointerdown', (e) => {
+      if (isLooking(e)) last.set(e.pointerId, [e.clientX, e.clientY]);
+    });
+    el.addEventListener('pointermove', (e) => {
+      const p = last.get(e.pointerId);
+      if (!p) return;
+      look[0] += (e.clientX - p[0]) * sens;
+      look[1] += (e.clientY - p[1]) * sens;
+      p[0] = e.clientX;
+      p[1] = e.clientY;
+    });
+    const end = (e) => last.delete(e.pointerId);
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    el.addEventListener('lostpointercapture', end);
+    resetters.push(() => last.clear());
+  }
+  (function setupLook() {
+    const zone = $('lookZone');
+    zone.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      capture(zone, e.pointerId);
+      zone.classList.add('active');
+    });
+    trackLook(zone, () => true);
+  })();
+
+  // ---- haptics --------------------------------------------------------------------------
+  // iPhone Safari has no vibration API, but since iOS 18 toggling a native switch
+  // gives a light tap. A hidden switch is flipped on each press.
+  const hapticSwitch = (() => {
+    const label = document.createElement('label');
+    label.setAttribute('aria-hidden', 'true');
+    label.style.cssText = 'position:fixed;left:-200px;top:0;width:1px;height:1px;overflow:hidden;opacity:0';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.setAttribute('switch', '');
+    label.appendChild(input);
+    document.body.appendChild(label);
+    return label;
+  })();
+  function haptic() {
+    if (!haptics) return;
+    if (navigator.vibrate) navigator.vibrate(12);
+    else hapticSwitch.click();
+  }
+
+  // ---- buttons ----------------------------------------------------------------------
+  let editing = false;
+  const buttonEls = document.querySelectorAll('[data-bind]');
+
+  function render(el) {
+    const b = binds[el.dataset.bind];
+    if (b.label) el.innerHTML = `<span>${b.label}</span><span class="cap">${cap(b.key)}</span>`;
+    else el.textContent = cap(b.key);
+    if (el.classList.contains('chip')) el.textContent = b.label || cap(b.key);
+  }
+
+  buttonEls.forEach((el) => {
+    const id = el.dataset.bind;
+    const pointers = new Set();
+    let latched = false;
+    let heldKey = null;     // the key actually sent, in case the bind changes later
+    render(el);
+
+    function press() {
+      heldKey = binds[id].key;
+      hold(heldKey, id);
+    }
+    function lift() {
+      if (heldKey) unhold(heldKey, id);
+      heldKey = null;
+    }
+
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (editing) { openPicker(id); return; }
+      capture(el, e.pointerId);
+      pointers.add(e.pointerId);
+      if (pointers.size > 1) return;
+      haptic();
+      noteClick();
+      if (binds[id].mode === 'toggle') {
+        latched = !latched;
+        el.classList.toggle('latched', latched);
+        if (latched) press(); else lift();
+      } else {
+        el.classList.add('held');
+        press();
+      }
+    });
+    const up = (e) => {
+      if (!pointers.delete(e.pointerId) || pointers.size) return;
+      noteClick();
+      if (binds[id].mode !== 'toggle' || !latched) {
+        el.classList.remove('held');
+        if (!latched) lift();
+      }
+    };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
+    if (binds[id].look) trackLook(el, () => !editing);
+    resetters.push(() => {
+      pointers.clear();
+      latched = false;
+      el.classList.remove('held', 'latched');
+      lift();
+    });
+  });
+
+  (function setupMousePad() {
+    const pad = $('mPad');
+    pad.addEventListener('pointerdown', (e) => { e.preventDefault(); capture(pad, e.pointerId); });
+    trackLook(pad, () => true);
+  })();
+
+  function setMode(m) {
+    if (m !== mode) resetControls();
+    mode = m;
+    document.body.classList.toggle('mode-mouse', mode === 'mouse');
+    $('modeBtn').textContent = mode === 'mouse' ? '🎮 Pad' : '🖱 Mouse';
+    save();
+  }
+  $('modeBtn').addEventListener('click', () => setMode(mode === 'mouse' ? 'pad' : 'mouse'));
+  $('rotateMouse').addEventListener('click', () => setMode('mouse'));
+
+  function resetControls() {
+    resetters.forEach((fn) => fn());
+    for (const key of holders.keys()) send({ t: 'b', k: key, d: false });
+    holders.clear();
+    look[0] = look[1] = 0;
+    $('lookZone').classList.remove('active');
+    sendStick();
+  }
+
+  // ---- send loop: once per frame, plus a heartbeat every 300 ms ------------------------
+  (function frame() {
+    if (dirty) sendStick();
+    if (look[0] || look[1]) {
+      send({ t: 'd', d: [r3(look[0]), r3(look[1])] });
+      look[0] = look[1] = 0;
+    }
+    requestAnimationFrame(frame);
+  })();
+  setInterval(sendStick, 300);
+
+  // ---- connection -------------------------------------------------------------------
+  function connect() {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+    if (!token) {
+      setStatus('No pairing token. Scan the QR code again.', '');
+      return;
+    }
+    if (ws) return;
+    setStatus('Connecting…', 'wait');
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const sock = new WebSocket(`${proto}//${location.host}/ws?token=${encodeURIComponent(token)}`);
+    ws = sock;
+    const giveUp = setTimeout(() => { if (sock.readyState === WebSocket.CONNECTING) sock.close(); }, 4000);
+    sock.onopen = () => {
+      clearTimeout(giveUp);
+      if (ws !== sock) return;
+      setStatus('Connected', 'ok');
+      sendStick();
+      requestWakeLock();
+    };
+    sock.onclose = (e) => {
+      clearTimeout(giveUp);
+      if (ws !== sock) return;
+      ws = null;
+      resetControls();
+      if (e.code === 4000) {
+        setStatus('Another phone took over. Tap to reconnect.', '');
+        return;
+      }
+      setStatus('Disconnected. Retrying…', 'wait');
+      retryTimer = setTimeout(connect, 1000);
+    };
+  }
+  $('status').addEventListener('click', () => { if (!ws) connect(); });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      resetControls();
+    } else {
+      if (!ws) connect();
+      requestWakeLock();
+    }
+  });
+
+  // ---- settings -----------------------------------------------------------------------
+  function showSettings(open) {
+    if (open) resetControls();
+    $('settings').classList.toggle('open', open);
+  }
+  function renderSettings() {
+    $('sens').value = sens;
+    $('sensOut').textContent = sens.toFixed(2) + '×';
+    $('gyroSens').value = gyroSens;
+    $('gyroSensOut').textContent = gyroSens.toFixed(2) + '×';
+    $('steady').value = steadiness;
+    $('steadyOut').textContent = Math.round(steadiness * 100) + '%';
+    $('precisionBtn').textContent = precision ? 'On' : 'Off';
+    $('precisionBtn').classList.toggle('on', precision);
+    $('motionInPad').textContent = motionInPad ? 'On' : 'Off';
+    $('motionInPad').classList.toggle('on', motionInPad);
+    $('hapticsBtn').textContent = haptics ? 'On' : 'Off';
+    $('hapticsBtn').classList.toggle('on', haptics);
+    $('autoSprint').textContent = autoSprint ? 'On' : 'Off';
+    $('autoSprint').classList.toggle('on', autoSprint);
+  }
+  $('gear').addEventListener('click', () => { renderSettings(); showSettings(true); });
+  $('settingsClose').addEventListener('click', () => showSettings(false));
+  $('sens').addEventListener('input', () => {
+    sens = parseFloat($('sens').value) || 1;
+    renderSettings();
+    save();
+  });
+  $('autoSprint').addEventListener('click', () => { autoSprint = !autoSprint; renderSettings(); save(); });
+  $('gyroSens').addEventListener('input', () => {
+    gyroSens = parseFloat($('gyroSens').value) || 1;
+    renderSettings();
+    save();
+  });
+  $('steady').addEventListener('input', () => {
+    steadiness = parseFloat($('steady').value);
+    if (!Number.isFinite(steadiness)) steadiness = 0.5;
+    renderSettings();
+    save();
+  });
+  $('precisionBtn').addEventListener('click', () => { precision = !precision; renderSettings(); save(); });
+  $('motionInPad').addEventListener('click', () => {
+    motionInPad = !motionInPad;
+    renderSettings();
+    save();
+    if (motionInPad) enableMotion();
+  });
+  $('hapticsBtn').addEventListener('click', () => { haptics = !haptics; renderSettings(); save(); haptic(); });
+  $('recal').addEventListener('click', () => { showSettings(false); enableMotion(true); });
+  $('editStart').addEventListener('click', () => {
+    showSettings(false);
+    editing = true;
+    document.body.classList.add('editing');
+  });
+  $('editDone').addEventListener('click', () => {
+    editing = false;
+    document.body.classList.remove('editing');
+  });
+  $('resetBinds').addEventListener('click', () => {
+    saved.binds = {};
+    loadBinds();
+    save();
+    buttonEls.forEach(render);
+    $('resetBinds').textContent = 'Done ✓';
+    setTimeout(() => { $('resetBinds').textContent = 'Reset'; }, 1200);
+  });
+
+  // ---- key picker ---------------------------------------------------------------------
+  let picking = null;
+  KEYS.forEach((k) => {
+    const b = document.createElement('button');
+    b.textContent = cap(k);
+    b.dataset.key = k;
+    b.addEventListener('click', () => {
+      binds[picking].key = k;
+      save();
+      document.querySelectorAll(`[data-bind="${picking}"]`).forEach(render);
+      renderPicker();
+    });
+    $('keyGrid').appendChild(b);
+  });
+  document.querySelectorAll('#picker [data-mode]').forEach((b) => {
+    b.addEventListener('click', () => {
+      binds[picking].mode = b.dataset.mode;
+      save();
+      renderPicker();
+    });
+  });
+  function renderPicker() {
+    const b = binds[picking];
+    $('pickTitle').textContent = `${b.label || 'Button'}: ${cap(b.key)}`;
+    document.querySelectorAll('#keyGrid button').forEach((x) => x.classList.toggle('on', x.dataset.key === b.key));
+    document.querySelectorAll('#picker [data-mode]').forEach((x) => x.classList.toggle('on', x.dataset.mode === b.mode));
+  }
+  function openPicker(id) {
+    picking = id;
+    renderPicker();
+    $('picker').classList.add('open');
+  }
+  $('pickClose').addEventListener('click', () => $('picker').classList.remove('open'));
+
+  // ---- keep the screen on ---------------------------------------------------------------
+  let wakeLock = null;
+  async function requestWakeLock() {
+    if (!('wakeLock' in navigator) || wakeLock || document.visibilityState !== 'visible') return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } catch (e) { /* needs HTTPS on some browsers */ }
+  }
+
+  // ---- motion (air mouse) -----------------------------------------------------------------
+  // Turning the phone moves the cursor. For each sensor reading:
+  //  1. Map the raw rotation rates onto the phone's x/y/z axes. Browsers disagree
+  //     on which of alpha/beta/gamma is which axis, so calibration learns it.
+  //  2. Yaw = rotation about the real vertical (taken from gravity); pitch =
+  //     rotation about the screen's left-right edge, levelled. Twisting the phone
+  //     is ignored, and neither depends on the grip or on portrait vs landscape.
+  //  3. Smooth with a One Euro filter: steady when moving slowly, no lag when fast.
+  //  4. Pointer acceleration: slow moves are finer, fast moves go further.
+  //  5. Damp motion for a moment after a button press, which jolts the phone.
+  const GYRO_PX_PER_DEG = 12;    // before the server's --look-sens
+  const GYRO_DEADZONE = 0.6;     // deg/s
+  const CLICK_HUSH_MS = 140;
+  // Which raw component (alpha, beta, gamma) feeds the x, y and z axes.
+  const PERMS = [[0, 1, 2], [1, 2, 0], [2, 0, 1]];
+  let motionListening = false;
+  let motionOn = false;
+  let clutchHeld = false;
+  let lastMotion = 0;
+  let lastClickAt = 0;
+  let calibrating = null;
+  let grav = null;               // smoothed gravity direction, device x/y/z
+
+  function orientationAngle() {
+    const a = typeof window.orientation === 'number' ? window.orientation
+      : (screen.orientation && screen.orientation.angle) || 0;
+    return ((a % 360) + 360) % 360;
+  }
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const norm = (v) => Math.hypot(v[0], v[1], v[2]);
+  const unit = (v) => { const n = norm(v); return n ? v.map((x) => x / n) : v; };
+  const permute = (raw, p) => [raw[p[0]], raw[p[1]], raw[p[2]]];
+
+  // The screen's left-to-right direction in device axes, made level with the
+  // ground. Tilting "up" is rotation about this axis, in portrait or landscape.
+  function screenRight(g) {
+    const a = orientationAngle() * Math.PI / 180;
+    const r = [Math.cos(a), -Math.sin(a), 0];
+    if (!g) return r;
+    const d = dot(r, g);
+    const h = r.map((x, i) => x - d * g[i]);
+    return norm(h) > 0.3 ? unit(h) : r;
+  }
+
+  // One Euro filter (Casiez et al.): a low-pass whose cutoff rises with speed.
+  function oneEuro() {
+    let x = null, dx = 0;
+    const alpha = (fc, dt) => 1 / (1 + 1 / (2 * Math.PI * fc * dt));
+    return {
+      filter(v, dt, minCutoff, beta) {
+        if (x === null) { x = v; return v; }
+        dx += alpha(1, dt) * ((v - x) / dt - dx);
+        x += alpha(minCutoff + beta * Math.abs(dx), dt) * (v - x);
+        return x;
+      },
+      reset() { x = null; dx = 0; },
+    };
+  }
+  const fYaw = oneEuro(), fPitch = oneEuro();
+
+  function noteClick() { lastClickAt = performance.now(); }
+
+  function onMotion(e) {
+    const ag = e.accelerationIncludingGravity;
+    if (ag && ag.x !== null && ag.x !== undefined) {
+      const g = unit([ag.x || 0, ag.y || 0, ag.z || 0]);
+      grav = grav ? unit(grav.map((v, i) => v + 0.15 * (g[i] - v))) : g;
+    }
+    const rr = e.rotationRate;
+    if (!rr) return;
+    const now = performance.now();
+    const dt = lastMotion ? Math.min((now - lastMotion) / 1000, 0.1) : 0;
+    lastMotion = now;
+    if (!dt) return;
+    const raw = [rr.alpha || 0, rr.beta || 0, rr.gamma || 0];
+
+    if (calibrating) { calibStep(raw, dt); return; }
+    const active = motionOn && calib && !clutchHeld && !editing &&
+      (mode === 'mouse' || motionInPad) && document.visibilityState === 'visible';
+    if (!active) { fYaw.reset(); fPitch.reset(); return; }
+
+    let yaw, pitch;   // deg/s: yaw > 0 turns right, pitch > 0 tilts up
+    if (calib.perm && grav) {
+      const w = permute(raw, calib.perm);
+      yaw = calib.sYaw * dot(w, grav);
+      pitch = calib.sPitch * dot(w, screenRight(grav));
+    } else if (calib.yaw) {
+      // Fallback calibration: only valid for the grip it was recorded with.
+      const diff = Math.abs(orientationAngle() - calib.angle);
+      if (diff === 90 || diff === 270) return;
+      const flip = diff === 180 ? -1 : 1;
+      yaw = dot(raw, calib.yaw) * flip;
+      pitch = dot(raw, calib.pitch) * flip;
+    } else {
+      return;
+    }
+
+    const soft = (v) => Math.sign(v) * Math.max(Math.abs(v) - GYRO_DEADZONE, 0);
+    const minCutoff = 0.6 + 6 * (1 - steadiness);
+    yaw = fYaw.filter(soft(yaw), dt, minCutoff, 0.005);
+    pitch = fPitch.filter(soft(pitch), dt, minCutoff, 0.005);
+
+    const speed2 = yaw * yaw + pitch * pitch;
+    const accel = precision ? 0.45 + 1.1 * speed2 / (speed2 + 2500) : 1;
+    const since = now - lastClickAt;
+    const hush = since < CLICK_HUSH_MS ? Math.max(0, (since - 60) / (CLICK_HUSH_MS - 60)) : 1;
+    const k = GYRO_PX_PER_DEG * gyroSens * accel * hush * dt;
+    look[0] += yaw * k;
+    look[1] -= pitch * k;
+  }
+
+  async function enableMotion(recalibrate) {
+    if (!window.isSecureContext) { openSecure(); return; }
+    if (typeof DeviceMotionEvent === 'undefined') {
+      notice('This browser has no motion sensors.');
+      return;
+    }
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+      try {
+        if (await DeviceMotionEvent.requestPermission() !== 'granted') {
+          notice('Motion access was denied. Close Safari fully and try again.');
+          return;
+        }
+      } catch (err) {
+        notice('Tap the button again to allow motion.');
+        return;
+      }
+    }
+    if (!motionListening) {
+      window.addEventListener('devicemotion', onMotion);
+      motionListening = true;
+    }
+    if (recalibrate || !calib) startCalibration();
+    else setMotion(true);
+  }
+
+  function setMotion(on) {
+    motionOn = on;
+    $('motionBtn').textContent = on ? 'Motion on · tap to stop' : 'Enable motion';
+    $('motionBtn').classList.toggle('on', on);
+  }
+
+  const CALIB_STEPS = [
+    { arrow: '➜', text: 'Turn the phone to the RIGHT', hint: 'Like turning to look right. Keep it level; about a quarter turn is plenty.' },
+    { arrow: '⬆', text: 'Now tilt it UP', hint: 'Like aiming up at the sky, without twisting.' },
+  ];
+  function startCalibration() {
+    calibrating = { step: 0, sum: [0, 0, 0], gsum: [0, 0, 0], result: [] };
+    showCalibStep();
+    $('calib').classList.add('open');
+  }
+  function showCalibStep() {
+    const st = CALIB_STEPS[calibrating.step];
+    $('calibArrow').textContent = st.arrow;
+    $('calibText').textContent = st.text;
+    $('calibHint').textContent = st.hint;
+    $('calibBar').style.width = '0%';
+  }
+  function calibStep(raw, dt) {
+    const c = calibrating;
+    for (let i = 0; i < 3; i++) {
+      c.sum[i] += raw[i] * dt;              // degrees turned, per raw component
+      if (grav) c.gsum[i] += grav[i] * dt;
+    }
+    const turned = norm(c.sum);
+    $('calibBar').style.width = Math.min(turned / 30, 1) * 100 + '%';
+    if (turned < 30) return;
+    const v = unit(c.sum);
+    if (c.step === 1) {
+      const d = dot(v, c.result[0].v);
+      if (Math.abs(d) > 0.75) {
+        c.sum = [0, 0, 0];
+        c.gsum = [0, 0, 0];
+        $('calibHint').textContent = 'That looked like a turn again. Tilt the top up instead.';
+        return;
+      }
+    }
+    c.result.push({ v, g: norm(c.gsum) ? unit(c.gsum) : null });
+    haptic();
+    if (c.step === 0) {
+      c.step = 1;
+      c.sum = [0, 0, 0];
+      c.gsum = [0, 0, 0];
+      setTimeout(showCalibStep, 0);
+      return;
+    }
+    finishCalibration(c.result[0], c.result[1]);
+  }
+  function finishCalibration(turn, tilt) {
+    // Find the axis mapping under which "turn right" was rotation about gravity
+    // and "tilt up" was rotation about the screen's level left-right edge.
+    let best = null;
+    if (turn.g && tilt.g) {
+      for (const p of PERMS) {
+        const cy = dot(permute(turn.v, p), turn.g);
+        const cp = dot(permute(tilt.v, p), screenRight(tilt.g));
+        const score = Math.min(Math.abs(cy), Math.abs(cp));
+        if (!best || score > best.score) best = { p, score, sYaw: Math.sign(cy), sPitch: Math.sign(cp) };
+      }
+    }
+    if (best && best.score > 0.7) {
+      calib = { v: 2, perm: best.p, sYaw: best.sYaw, sPitch: best.sPitch };
+    } else {
+      // No gravity data, or a sloppy calibration: remember the two raw axes instead.
+      const d = dot(tilt.v, turn.v);
+      const pitchV = unit(tilt.v.map((x, i) => x - d * turn.v[i]));
+      calib = { v: 2, yaw: turn.v, pitch: pitchV, angle: orientationAngle() };
+      notice('Calibrated for this grip only. Calibrate again if you hold the phone differently.');
+    }
+    calibrating = null;
+    fYaw.reset();
+    fPitch.reset();
+    save();
+    $('calib').classList.remove('open');
+    setMotion(true);
+  }
+  $('calibCancel').addEventListener('click', () => {
+    calibrating = null;
+    $('calib').classList.remove('open');
+  });
+
+  $('motionBtn').addEventListener('click', () => {
+    if (motionOn) setMotion(false);
+    else enableMotion();
+  });
+  (function setupClutch() {
+    const el = $('clutch');
+    const set = (on) => { clutchHeld = on; el.classList.toggle('held', on); };
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); capture(el, e.pointerId); set(true); haptic(); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((t) => el.addEventListener(t, () => set(false)));
+    resetters.push(() => set(false));
+  })();
+
+  // ---- secure page setup ------------------------------------------------------------------
+  async function openSecure() {
+    let port = Number(location.port || 80) + 1;
+    try {
+      const info = await (await fetch('/info', { cache: 'no-store' })).json();
+      if (!info.https_port) {
+        notice('The secure page is off on the Mac (started with --no-https).');
+        return;
+      }
+      port = info.https_port;
+    } catch (e) { /* fall back to port + 1 */ }
+    $('secureLink').href = `https://${location.hostname}:${port}/?token=${encodeURIComponent(token)}&mode=mouse`;
+    $('secure').classList.add('open');
+  }
+  $('secureClose').addEventListener('click', () => $('secure').classList.remove('open'));
+
+  // ---- Home Screen tip ----------------------------------------------------------------------
+  const standalone = navigator.standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  if (!standalone) $('tip').hidden = false;
+
+  // ---- no zoom, scroll, selection or callouts (sheets may scroll) --------------------------
+  const block = (e) => e.preventDefault();
+  ['gesturestart', 'gesturechange', 'contextmenu', 'dblclick', 'selectstart'].forEach((t) =>
+    document.addEventListener(t, block));
+  document.addEventListener('touchmove', (e) => {
+    if (!e.target.closest('.card')) e.preventDefault();
+  }, { passive: false });
+
+  setMode(mode);
+  connect();
+})();
+</script>
+</body>
+</html>

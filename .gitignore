@@ -1,0 +1,9 @@
+# Secrets and machine-specific state: never commit these
+.token
+.certs/
+phonepad.log
+
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
