@@ -229,6 +229,12 @@ def main():
         proc.terminate()
         proc.wait(5)
     check(proc.returncode == 0, "dry-run server stopped cleanly")
+    if failures:
+        # Show what the server said (minus the QR code and input events) to explain the failure.
+        print("\n--- server output ---")
+        for line in lines:
+            if not line.startswith("[dry-run]") and "\x1b[" not in line:
+                print(line)
     print(f"\n{'ALL PASSED' if not failures else f'{len(failures)} FAILED'}")
     sys.exit(1 if failures else 0)
 
