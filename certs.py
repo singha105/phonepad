@@ -56,7 +56,8 @@ def ensure(cert_dir, hostnames, ips, label):
         ca = x509.load_pem_x509_certificate(ca_p.read_bytes())
     else:
         ca_key = ec.generate_private_key(ec.SECP256R1())
-        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"PhonePad local CA ({label})")])
+        # A common name may be at most 64 characters, and Mac hostnames can be longer.
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, f"PhonePad local CA ({label[:40]})")])
         permitted = [x509.DNSName("local"), x509.DNSName("localhost")] + [
             x509.IPAddress(ipaddress.ip_network(n)) for n in PERMITTED_NETS]
         ca = (
@@ -96,7 +97,8 @@ def ensure(cert_dir, hostnames, ips, label):
     sans = [x509.DNSName(n) for n in names] + [x509.IPAddress(ipaddress.ip_address(a)) for a in addrs]
     leaf = (
         x509.CertificateBuilder()
-        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, names[0] if names else "phonepad")]))
+        # Browsers match the SAN list, so the common name is only a label.
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "PhonePad server")]))
         .issuer_name(ca.subject)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
