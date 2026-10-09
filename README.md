@@ -167,3 +167,7 @@ docs/screenshots/  the images above
 - The game has to be the frontmost window.
 - Safari can't keep the screen awake on the plain-http page. Use the secure page, or set a longer Auto-Lock while playing.
 - Motion was verified with a simulator and the browser, not across many iPhone models.
+
+## License
+
+MIT. See [LICENSE](LICENSE). Roblox and The Eastern War are trademarks of their respective owners; this project is not affiliated with them.
