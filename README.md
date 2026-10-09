@@ -1,5 +1,7 @@
 # PhonePad
 
+[![tests](https://github.com/singha105/phonepad/actions/workflows/tests.yml/badge.svg)](https://github.com/singha105/phonepad/actions/workflows/tests.yml) ![macOS](https://img.shields.io/badge/macOS-Quartz-black) ![license](https://img.shields.io/badge/license-MIT-blue)
+
 Turn an iPhone into a game controller for Roblox on a Mac. There's no app to install and no Apple developer account: a small Python server runs on the Mac, the phone opens a controller page in Safari over Wi‑Fi, and the server turns touches into real keyboard and mouse input for whatever game is in front.
 
 The default layout is built for Roblox military shooters, tuned on [The Eastern War 2.5](https://www.roblox.com/games/16740784399). Every button can be remapped from the phone, so it works for other games too.
